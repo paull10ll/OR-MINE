@@ -1,0 +1,1106 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Jeu à deux joueurs où l'on cache 5 gemmes sur un plateau et devine celles de l'adversaire en sondant sa mine avec des ondes lumineuses.">
+<title>Orapa Mine</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;0,9..144,800;1,9..144,500;1,9..144,600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  /* ===== Tokens — a single, deliberate world: a lantern-lit gem shaft at night.
+     No light-mode variant: the cave stays the cave regardless of host theme. ===== */
+  :root{
+    --ink:#120c08;
+    --ink-deep:#0a0705;
+    --panel:#1c140d;
+    --panel-2:#251a11;
+    --line:#3d3021;
+    --line-soft:#2a2015;
+    --text:#f1e6d1;
+    --text-dim:#bcae93;
+    --text-faint:#7c6d53;
+    --ember:#d38a3f;
+    --ember-bright:#f2b567;
+    --ember-dim:#8a5a28;
+    --danger:#e2896f;
+    --good:#8fbf7a;
+    --c-red:#c94a5c;
+    --c-blue:#4f80e0;
+    --c-yellow:#d7ab4a;
+    --c-white:#ece3d1;
+    --c-black:#3a2f22;
+    --shadow-card: 0 24px 60px -24px rgba(0,0,0,.75), 0 2px 0 rgba(255,255,255,.02) inset;
+    --radius-s:5px;
+    --radius-m:9px;
+    --radius-l:16px;
+    --font-display:'Fraunces', Georgia, 'Iowan Old Style', serif;
+    --font-mono:'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  }
+
+  *{ box-sizing:border-box; }
+  body{
+    margin:0;
+    background:
+      radial-gradient(ellipse 900px 560px at 50% -8%, #3a2412 0%, transparent 60%),
+      radial-gradient(ellipse 1100px 700px at 50% 108%, #1a1108 0%, transparent 55%),
+      var(--ink);
+    color:var(--text);
+    font-family:var(--font-display);
+    min-height:100vh;
+  }
+  h1,h2,h3{ text-wrap:balance; margin:0; }
+  p{ margin:0; }
+  button{ font-family:inherit; }
+  ::selection{ background:var(--ember-dim); color:var(--text); }
+
+  /* faint rock grain, self-contained (no external asset) */
+  #grain{
+    position:fixed; inset:0; pointer-events:none; z-index:0;
+    opacity:.05; mix-blend-mode:overlay;
+  }
+
+  #app{ position:relative; z-index:1; }
+
+  a, button, input, [tabindex]{ }
+  button:focus-visible, input:focus-visible, [tabindex]:focus-visible, .cell-click:focus-visible{
+    outline:2px solid var(--ember-bright);
+    outline-offset:2px;
+  }
+
+  .shell{
+    min-height:100vh;
+    display:flex; flex-direction:column; align-items:center;
+    padding:36px 18px 56px;
+  }
+
+  /* ---------- header / wordmark ---------- */
+  .wordmark{ text-align:center; margin-bottom:26px; max-width:440px; }
+  .wordmark .glyphs{ display:flex; justify-content:center; gap:10px; margin-bottom:6px; }
+  .wordmark .glyphs svg:nth-child(2){ transform:translateY(7px); }
+  .wordmark h1{
+    font-size:clamp(30px,6vw,40px); font-weight:700; letter-spacing:.5px;
+    color:var(--text);
+  }
+  .wordmark .tag{
+    font-family:var(--font-mono); font-size:11.5px; letter-spacing:2.5px; text-transform:uppercase;
+    color:var(--text-faint); margin-top:9px;
+  }
+  .wordmark .lede{
+    font-size:14px; line-height:1.6; color:var(--text-dim); margin-top:14px;
+  }
+
+  .divider{
+    width:100%; max-width:380px; height:1px; margin:0 auto 24px;
+    background:linear-gradient(90deg, transparent, var(--line) 20%, var(--ember-dim) 50%, var(--line) 80%, transparent);
+    position:relative;
+  }
+  .divider::before, .divider::after{
+    content:''; position:absolute; top:-2.5px; width:5px; height:5px; border-radius:50%;
+    background:var(--ember-dim);
+  }
+  .divider::before{ left:calc(50% - 40px); }
+  .divider::after{ left:calc(50% + 36px); }
+
+  /* ---------- ledger card ---------- */
+  .card{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:var(--radius-l);
+    box-shadow:var(--shadow-card);
+    padding:26px 24px;
+    width:100%; max-width:600px;
+    position:relative;
+  }
+  .card::before, .card::after,
+  .card .rivet-tl, .card .rivet-tr, .card .rivet-bl, .card .rivet-br{ }
+  .rivet{
+    position:absolute; width:5px; height:5px; border-radius:50%;
+    background:var(--line); box-shadow:0 1px 0 rgba(255,255,255,.04) inset;
+  }
+  .rivet.tl{ top:11px; left:11px; } .rivet.tr{ top:11px; right:11px; }
+  .rivet.bl{ bottom:11px; left:11px; } .rivet.br{ bottom:11px; right:11px; }
+
+  .card-head{ text-align:center; margin-bottom:6px; }
+  .card-head h2{ font-size:21px; font-weight:600; }
+  .card-head .sub{ font-family:var(--font-mono); font-size:12px; color:var(--text-faint); margin-top:6px; }
+
+  .field-row{ display:flex; flex-direction:column; align-items:center; gap:12px; margin-top:18px; }
+  input[type=text]{
+    background:var(--ink-deep); border:1px solid var(--line); color:var(--text);
+    padding:11px 14px; border-radius:var(--radius-s); font-size:15px; font-family:inherit;
+    outline:none; width:100%; max-width:240px; text-align:center;
+    transition:border-color .15s ease;
+  }
+  input[type=text]:focus{ border-color:var(--ember-dim); }
+  input.code-input{
+    font-family:var(--font-mono); letter-spacing:5px; text-transform:uppercase; text-align:center;
+  }
+
+  .stack{ display:flex; flex-direction:column; gap:10px; width:100%; max-width:270px; margin:16px auto 0; }
+  .row{ display:flex; gap:8px; }
+
+  .btn{
+    border-radius:var(--radius-s); font-size:14px; cursor:pointer;
+    display:inline-flex; align-items:center; justify-content:center; gap:7px;
+    padding:11px 18px; border:1px solid transparent; line-height:1.1;
+    transition:transform .12s ease, box-shadow .12s ease, opacity .12s ease, background .12s ease;
+    font-weight:500; letter-spacing:.2px;
+  }
+  .btn:active{ transform:translateY(1px); }
+  .btn:disabled{ opacity:.35; cursor:not-allowed; transform:none; }
+  .btn-primary{
+    background:linear-gradient(180deg, var(--ember-bright), var(--ember));
+    color:#241608; border-color:var(--ember-dim); font-weight:600;
+    box-shadow:0 1px 0 rgba(255,255,255,.35) inset, 0 8px 18px -10px rgba(211,138,63,.6);
+  }
+  .btn-primary:not(:disabled):hover{ filter:brightness(1.06); }
+  .btn-secondary{
+    background:transparent; color:var(--text); border-color:var(--line);
+  }
+  .btn-secondary:not(:disabled):hover{ border-color:var(--ember-dim); color:var(--ember-bright); }
+  .btn-ghost{
+    background:transparent; color:var(--text-faint); border-color:transparent;
+    padding:7px 10px; font-size:12.5px; text-decoration:underline; text-underline-offset:3px;
+  }
+  .btn-ghost:hover{ color:var(--text-dim); }
+  .btn-icon{ padding:9px 11px; }
+  .btn.active{ border-color:var(--ember); color:var(--ember-bright); }
+
+  .msg-error{ color:var(--danger); font-size:13px; margin-top:12px; text-align:center; max-width:340px; }
+  .msg-hint{ color:var(--text-dim); font-size:13px; line-height:1.6; text-align:center; max-width:460px; margin:0 auto 4px; }
+  .footnote{ color:var(--text-faint); font-size:11.5px; margin-top:22px; max-width:320px; text-align:center; line-height:1.55; }
+
+  .info-toggle{
+    position:absolute; top:16px; right:16px;
+    background:transparent; border:1px solid var(--line); color:var(--ember);
+    border-radius:50%; width:32px; height:32px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .info-toggle:hover{ border-color:var(--ember-dim); color:var(--ember-bright); }
+
+  /* ---------- modal ---------- */
+  .modal-overlay{
+    position:fixed; inset:0; background:rgba(8,5,3,.78); z-index:60;
+    display:flex; align-items:center; justify-content:center; padding:20px;
+  }
+  .modal{
+    background:var(--panel-2); border:1px solid var(--line); border-radius:var(--radius-l);
+    padding:24px; max-width:480px; max-height:82vh; overflow-y:auto; box-shadow:var(--shadow-card);
+  }
+  .modal h3{ font-size:19px; font-weight:600; }
+  .modal-close{ background:transparent; border:none; color:var(--text-dim); cursor:pointer; padding:4px; }
+  .modal-close:hover{ color:var(--text); }
+  .modal p{ font-size:13.5px; line-height:1.65; color:var(--text-dim); margin-top:12px; }
+  .modal .kicker{ font-family:var(--font-mono); font-size:11px; letter-spacing:1.6px; color:var(--text-faint); margin-top:18px; text-transform:uppercase; }
+  .mix-list{ display:flex; flex-direction:column; gap:5px; font-size:13px; margin-top:8px; }
+  .mix-list div{ color:var(--text-dim); font-family:var(--font-mono); font-size:12.5px; }
+
+  /* ---------- room code ---------- */
+  .code-display{ display:flex; align-items:center; gap:10px; margin-top:14px; }
+  .code-display .code-text{
+    font-family:var(--font-mono); font-size:34px; letter-spacing:7px; color:var(--ember-bright);
+    font-weight:600;
+  }
+  .live-dot{ width:7px; height:7px; border-radius:50%; background:var(--good); display:inline-block; animation:pulse 1.8s ease-in-out infinite; }
+  @keyframes pulse{ 0%,100%{opacity:.5;} 50%{opacity:1;} }
+  .live-row{ display:flex; align-items:center; gap:6px; font-family:var(--font-mono); font-size:11px; color:var(--text-faint); letter-spacing:1px; text-transform:uppercase; justify-content:center; margin-top:14px; }
+
+  /* ---------- piece tray ---------- */
+  .tray{ display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin:16px 0; max-width:560px; }
+  .tray-item{
+    flex-direction:column; gap:3px; padding:9px 12px; font-size:12.5px;
+  }
+  .tray-item .t-name{ font-weight:500; }
+  .tray-item .t-count{ color:var(--text-faint); font-family:var(--font-mono); font-size:11px; }
+
+  .tools-row{ display:flex; align-items:center; justify-content:center; gap:14px; margin-bottom:14px; flex-wrap:wrap; }
+  .swatches{ display:flex; gap:7px; }
+  .swatch{
+    width:27px; height:27px; border-radius:50%; cursor:pointer; border:1px solid var(--line);
+    box-shadow:0 1px 0 rgba(255,255,255,.15) inset;
+    transition:transform .1s ease;
+  }
+  .swatch:hover:not(.disabled){ transform:scale(1.08); }
+  .swatch.selected{ outline:2px solid var(--text); outline-offset:2px; }
+  .swatch.disabled{ opacity:.28; cursor:not-allowed; }
+
+  /* ---------- board ---------- */
+  .board-scroll{ overflow-x:auto; max-width:100%; padding-bottom:4px; }
+  .board-wrap{ display:inline-block; margin:0 auto; }
+  .board-grid{
+    position:relative; background:var(--ink-deep); border-radius:8px; border:1px solid var(--line-soft);
+    box-shadow:0 2px 10px rgba(0,0,0,.5) inset;
+  }
+  .board-cell{
+    position:absolute; border:1px solid var(--line-soft); background:rgba(255,255,255,.008);
+  }
+  .board-cell.placeable{ cursor:pointer; }
+  .board-cell.placeable:hover{ background:rgba(211,138,63,.10); }
+  .gem-fill{ position:absolute; inset:2px; box-shadow:0 1px 2px rgba(0,0,0,.4); }
+  .gem-fill.full{ border-radius:3px; }
+  .remove-x{
+    position:absolute; cursor:pointer; color:#fff; opacity:.75; z-index:3;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .remove-x:hover{ opacity:1; }
+  .edge-strip{ display:flex; }
+  .edge-strip.vert{ flex-direction:column; }
+  .edge-btn{
+    font-family:var(--font-mono); font-size:10px; margin:1px; border-radius:3px;
+    background:var(--panel-2); border:1px solid var(--line); color:var(--text-dim);
+    cursor:default; display:flex; align-items:center; justify-content:center;
+  }
+  .edge-btn.live{ cursor:pointer; }
+  .edge-btn.live:hover{ border-color:var(--ember); color:var(--ember-bright); background:rgba(211,138,63,.12); }
+  .edge-btn.fired{ color:var(--text); }
+
+  /* ---------- play screen ---------- */
+  .turn-row{ display:flex; align-items:baseline; gap:10px; margin-bottom:5px; }
+  .turn-row h2{ font-size:20px; font-weight:600; }
+  .players-line{ color:var(--text-faint); font-size:12px; font-family:var(--font-mono); margin-bottom:16px; text-align:center; }
+  .mode-row{ display:flex; gap:8px; margin-bottom:16px; justify-content:center; flex-wrap:wrap; }
+  .panel-label{ font-size:13px; color:var(--text-dim); margin-bottom:8px; text-align:center; }
+
+  /* ---------- shot log ---------- */
+  .log{ margin-top:26px; width:100%; max-width:440px; }
+  .log .kicker{ font-family:var(--font-mono); font-size:11px; letter-spacing:1.8px; color:var(--text-faint); margin-bottom:8px; text-transform:uppercase; text-align:center; }
+  .log-item{
+    font-size:12px; font-family:var(--font-mono); color:var(--text-dim);
+    display:flex; justify-content:space-between; gap:10px;
+    border-bottom:1px solid var(--line-soft); padding:6px 2px;
+  }
+  .log-item .who{ color:var(--text-faint); }
+  .swatch-dot{ display:inline-block; width:8px; height:8px; border-radius:50%; margin-left:6px; vertical-align:middle; }
+
+  .center-col{ display:flex; flex-direction:column; align-items:center; width:100%; }
+  .icon-ember{ color:var(--ember); }
+  .icon-faint{ color:var(--text-faint); }
+
+  /* ---------- correspondence sync panel (code exchange, no server) ---------- */
+  .sync-panel{
+    width:100%; margin-top:22px; padding-top:18px; border-top:1px dashed var(--line);
+  }
+  .sync-panel .sync-title{
+    display:flex; align-items:center; gap:7px; font-family:var(--font-mono); font-size:11px;
+    letter-spacing:1.6px; text-transform:uppercase; color:var(--text-faint); margin-bottom:10px; justify-content:center;
+  }
+  .sync-block{ margin-bottom:14px; }
+  .sync-label{ font-size:12.5px; color:var(--text-dim); margin-bottom:6px; text-align:center; }
+  .sync-textarea{
+    width:100%; background:var(--ink-deep); border:1px solid var(--line); color:var(--text-dim);
+    font-family:var(--font-mono); font-size:11px; line-height:1.5; border-radius:var(--radius-s);
+    padding:9px 10px; resize:vertical; word-break:break-all; outline:none; min-height:64px;
+  }
+  .sync-textarea:focus{ border-color:var(--ember-dim); color:var(--text); }
+  .sync-actions{ display:flex; justify-content:center; gap:8px; margin-top:8px; }
+  .step-badge{
+    display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px;
+    border-radius:50%; background:var(--ember-dim); color:#241608; font-family:var(--font-mono);
+    font-size:10.5px; font-weight:600; margin-right:6px; flex:none;
+  }
+
+  @media (max-width:480px){
+    .card{ padding:20px 14px; }
+    .code-display .code-text{ font-size:26px; letter-spacing:5px; }
+  }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute">
+  <filter id="grainFilter"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/></filter>
+</svg>
+<svg id="grain" width="100%" height="100%"><rect width="100%" height="100%" filter="url(#grainFilter)"/></svg>
+
+<div id="app"></div>
+
+<script>
+'use strict';
+
+/* =========================================================================
+   GAME LOGIC — board geometry, piece footprints, colour mixing, ray tracing.
+   Ported 1:1 from the original single-player-authored ruleset.
+   ========================================================================= */
+const ROWS = 8, COLS = 10;
+
+const SHAPES = {
+  small_tri: { name: "Petit triangle", H: 1, W: 1, count: 2, cells: [{ dr: 0, dc: 0, type: "BR" }] },
+  big_tri:   { name: "Grand triangle", H: 2, W: 2, count: 2, cells: [{ dr: 0, dc: 0, type: "BL" }, { dr: 1, dc: 0, type: "full" }, { dr: 1, dc: 1, type: "BL" }] },
+  diamond:   { name: "Petit losange", H: 2, W: 2, count: 1, cells: [{ dr: 0, dc: 0, type: "BR" }, { dr: 0, dc: 1, type: "BL" }, { dr: 1, dc: 0, type: "TR" }, { dr: 1, dc: 1, type: "TL" }] },
+  rect:      { name: "Rectangle", H: 1, W: 2, count: 1, cells: [{ dr: 0, dc: 0, type: "full" }, { dr: 0, dc: 1, type: "full" }] },
+  trapezoid: { name: "Trapèze", H: 1, W: 3, count: 1, cells: [{ dr: 0, dc: 0, type: "BR" }, { dr: 0, dc: 1, type: "full" }, { dr: 0, dc: 2, type: "BL" }] },
+  med_tri:   { name: "Triangle moyen", H: 1, W: 2, count: 1, cells: [{ dr: 0, dc: 0, type: "BR" }, { dr: 0, dc: 1, type: "BL" }] },
+};
+const SHAPE_IDS = Object.keys(SHAPES);
+const TOTAL_PIECES = 5;
+
+const CORNER_ROTATE = { TL: "TR", TR: "BR", BR: "BL", BL: "TL" };
+function rotateFootprint(cells, H) {
+  return cells.map((c) => ({ dr: c.dc, dc: H - 1 - c.dr, type: c.type === "full" ? "full" : CORNER_ROTATE[c.type] }));
+}
+function getFootprint(shapeId, rotation) {
+  const shape = SHAPES[shapeId];
+  let cells = shape.cells, H = shape.H, W = shape.W;
+  for (let i = 0; i < rotation; i++) { cells = rotateFootprint(cells, H); [H, W] = [W, H]; }
+  return { cells, H, W };
+}
+
+const CELL_RULES = {
+  BL: { legs: ["bottom", "left"], mirror: "back" },
+  BR: { legs: ["bottom", "right"], mirror: "slash" },
+  TL: { legs: ["top", "left"], mirror: "slash" },
+  TR: { legs: ["top", "right"], mirror: "back" },
+};
+const DIRS = { up: { dr: -1, dc: 0 }, down: { dr: 1, dc: 0 }, left: { dr: 0, dc: -1 }, right: { dr: 0, dc: 1 } };
+const OPPOSITE = { up: "down", down: "up", left: "right", right: "left" };
+const SIDE_ENTERED = { down: "top", up: "bottom", right: "left", left: "right" };
+function reflect(dir, mirror) {
+  if (mirror === "slash") return { right: "up", up: "right", left: "down", down: "left" }[dir];
+  return { right: "down", down: "right", left: "up", up: "left" }[dir];
+}
+
+const PRIMARY_NAMES = { red: "rouge", blue: "bleu", yellow: "jaune" };
+const BASE_HEX = {
+  rouge: "#c94a5c", bleu: "#4f80e0", jaune: "#d7ab4a", blanc: "#ece3d1", noir: "#3a2f22",
+  violet: "#9b5fc9", orange: "#d98a3e", vert: "#5a9e4f", marron: "#7a5230", gris: "#9a9186", incolore: "#5f574a",
+};
+function hexToRgb(h) { h = h.replace("#", ""); return [parseInt(h.substr(0, 2), 16), parseInt(h.substr(2, 2), 16), parseInt(h.substr(4, 2), 16)]; }
+function rgbToHex(r, g, b) { return "#" + [r, g, b].map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, "0")).join(""); }
+function blend(hex, target, ratio) {
+  const [r1, g1, b1] = hexToRgb(hex), [r2, g2, b2] = hexToRgb(target);
+  return rgbToHex(r1 + (r2 - r1) * ratio, g1 + (g2 - g1) * ratio, b1 + (b2 - b1) * ratio);
+}
+function mixColors(colorsSet) {
+  const primaries = ["red", "blue", "yellow"].filter((c) => colorsSet.has(c));
+  const hasWhite = colorsSet.has("white"), hasBlack = colorsSet.has("black");
+  let base = null;
+  if (primaries.length === 3) base = "marron";
+  else if (primaries.length === 2) { const s = [...primaries].sort().join("+"); base = { "blue+red": "violet", "red+yellow": "orange", "blue+yellow": "vert" }[s]; }
+  else if (primaries.length === 1) base = PRIMARY_NAMES[primaries[0]];
+  if (base) {
+    if (hasWhite && hasBlack) return base + " grisé";
+    if (hasWhite) return base + " clair";
+    if (hasBlack) return base + " foncé";
+    return base;
+  }
+  if (hasWhite && hasBlack) return "gris";
+  if (hasWhite) return "blanc";
+  if (hasBlack) return "noir";
+  return "incolore";
+}
+function colorDisplayHex(name) {
+  let base = name, mod = null;
+  if (name.endsWith(" clair")) { base = name.slice(0, -6); mod = "clair"; }
+  else if (name.endsWith(" foncé")) { base = name.slice(0, -6); mod = "foncé"; }
+  else if (name.endsWith(" grisé")) { base = name.slice(0, -6); mod = "grisé"; }
+  let hex = BASE_HEX[base] || "#9a9186";
+  if (mod === "clair") hex = blend(hex, "#f5f1e6", 0.55);
+  if (mod === "foncé") hex = blend(hex, "#221c15", 0.55);
+  if (mod === "grisé") hex = blend(hex, "#8a8579", 0.55);
+  return hex;
+}
+
+const CLIP_PATHS = {
+  BR: "polygon(0% 100%, 100% 100%, 100% 0%)",
+  BL: "polygon(0% 0%, 0% 100%, 100% 100%)",
+  TL: "polygon(0% 0%, 100% 0%, 0% 100%)",
+  TR: "polygon(0% 0%, 100% 0%, 100% 100%)",
+  full: "none",
+};
+
+function traceRay(edge, index, cellMap) {
+  let cur, dir;
+  if (edge === "top") { cur = { r: 0, c: index }; dir = "down"; }
+  else if (edge === "bottom") { cur = { r: ROWS - 1, c: index }; dir = "up"; }
+  else if (edge === "left") { cur = { r: index, c: 0 }; dir = "right"; }
+  else { cur = { r: index, c: COLS - 1 }; dir = "left"; }
+
+  const colors = new Set();
+  let guard = 0;
+  while (cur.r >= 0 && cur.r < ROWS && cur.c >= 0 && cur.c < COLS && guard < 300) {
+    guard++;
+    const cell = cellMap[cur.r + "," + cur.c];
+    if (cell) {
+      colors.add(cell.color);
+      if (cell.type === "full") { dir = OPPOSITE[dir]; }
+      else {
+        const rule = CELL_RULES[cell.type];
+        const side = SIDE_ENTERED[dir];
+        dir = rule.legs.includes(side) ? OPPOSITE[dir] : reflect(dir, rule.mirror);
+      }
+    }
+    const d = DIRS[dir];
+    cur = { r: cur.r + d.dr, c: cur.c + d.dc };
+  }
+  let outEdge, outIndex;
+  if (cur.r < 0) { outEdge = "top"; outIndex = cur.c; }
+  else if (cur.r >= ROWS) { outEdge = "bottom"; outIndex = cur.c; }
+  else if (cur.c < 0) { outEdge = "left"; outIndex = cur.r; }
+  else { outEdge = "right"; outIndex = cur.r; }
+
+  return { outEdge, outIndex, colorName: mixColors(colors) };
+}
+
+function edgeLabel(edge, index) {
+  if (edge === "top") return String(index + 1);
+  if (edge === "right") return String(11 + index);
+  if (edge === "bottom") return String.fromCharCode(65 + 8 + index);
+  return String.fromCharCode(65 + index);
+}
+
+function piecesToCellMap(pieces) {
+  const map = {};
+  for (const p of pieces) for (const c of p.cells) map[c.r + "," + c.c] = { type: c.type, color: p.color };
+  return map;
+}
+function flattenCells(pieces) { return pieces.flatMap((p) => p.cells.map((c) => ({ r: c.r, c: c.c }))); }
+function canPlace(anchorR, anchorC, shapeId, rotation, existingPieces) {
+  const { cells } = getFootprint(shapeId, rotation);
+  const abs = cells.map((c) => ({ r: anchorR + c.dr, c: anchorC + c.dc, type: c.type }));
+  if (abs.some((a) => a.r < 0 || a.r >= ROWS || a.c < 0 || a.c >= COLS)) return null;
+  const existing = flattenCells(existingPieces);
+  if (abs.some((a) => existing.some((e) => e.r === a.r && e.c === a.c))) return null;
+  const orth = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+  if (abs.some((a) => existing.some((e) => orth.some(([dr, dc]) => e.r === a.r + dr && e.c === a.c + dc)))) return null;
+  return abs;
+}
+function remainingCounts(placedPieces) {
+  const used = {};
+  for (const p of placedPieces) used[p.shapeId] = (used[p.shapeId] || 0) + 1;
+  const out = {};
+  for (const id of SHAPE_IDS) out[id] = SHAPES[id].count - (used[id] || 0);
+  return out;
+}
+function colorCounts(placedPieces) {
+  const c = {};
+  for (const p of placedPieces) c[p.color] = (c[p.color] || 0) + 1;
+  return c;
+}
+function boardsEqual(a, b) {
+  const norm = (pieces) => pieces.flatMap((p) => p.cells.map((c) => c.r + "," + c.c + "," + c.type + "," + p.color)).sort();
+  const na = norm(a), nb = norm(b || []);
+  if (na.length !== nb.length) return false;
+  return na.every((v, i) => v === nb[i]);
+}
+
+const COLOR_CHOICES = ["red", "blue", "yellow", "white", "black"];
+const COLOR_LABEL = { red: "rouge", blue: "bleu", yellow: "jaune", white: "blanc", black: "noir" };
+const COLOR_HEX = { red: "var(--c-red)", blue: "var(--c-blue)", yellow: "var(--c-yellow)", white: "var(--c-white)", black: "var(--c-black)" };
+
+function makeId(len) {
+  len = len || 10;
+  const chars = "23456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+  let out = "";
+  const rnd = (window.crypto && crypto.getRandomValues) ? crypto.getRandomValues(new Uint32Array(len)) : null;
+  for (let i = 0; i < len; i++) {
+    const v = rnd ? rnd[i] : Math.floor(Math.random() * 4294967295);
+    out += chars[v % chars.length];
+  }
+  return out;
+}
+function makeCode() {
+  const letters = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+  let s = "";
+  for (let i = 0; i < 4; i++) s += letters[Math.floor(Math.random() * letters.length)];
+  return s;
+}
+
+/* =========================================================================
+   PERSISTENCE — no server at all. Two players each hold their own local copy
+   of the game; they stay in sync by pasting each other a short text code
+   after every move (the classic "correspondence game" pattern). This is what
+   makes the page shareable with literally anyone: nothing here needs a
+   signed-in account or a live connection, so the artifact can be shared
+   publicly like any other page.
+
+   status/turn are never stored — they're DERIVED from players+shots so the
+   two independently-evolving local copies can't drift out of sync on those
+   fields; only players, shots and winner ever need merging.
+   ========================================================================= */
+function deriveStatus(g) {
+  if (!g) return "waiting";
+  if (g.winner) return "finished";
+  if (!g.players || g.players.length < 2) return "waiting";
+  const [p1, p2] = g.players;
+  if (!p1.board || !p2.board) return "setup";
+  return "playing";
+}
+function deriveTurnIndex(g) { return (g.shots || []).length % 2; }
+function turnPlayer(g) { const idx = deriveTurnIndex(g); return g.players && g.players[idx] ? g.players[idx] : null; }
+function playerName(g, id) { const p = g && g.players ? g.players.find((pp) => pp.id === id) : null; return p ? p.name : "Joueur"; }
+
+/* ---- compact wire format: plain arrays, no repeated key names ---- */
+function pieceToWire(p) { return [p.shapeId, p.rotation, p.color, p.cells.map((c) => [c.r, c.c, c.type])]; }
+function pieceFromWire(w, idx) { return { uid: w[0] + "-" + idx, shapeId: w[0], rotation: w[1], color: w[2], cells: w[3].map((t) => ({ r: t[0], c: t[1], type: t[2] })) }; }
+function boardToWire(board) { return board ? board.map(pieceToWire) : null; }
+function boardFromWire(w) { return w ? w.map((pw, idx) => pieceFromWire(pw, idx)) : null; }
+function playerToWire(p) { return [p.id, p.name, boardToWire(p.board)]; }
+function playerFromWire(w) { return { id: w[0], name: w[1], board: boardFromWire(w[2]) }; }
+function shotToWire(s) { return s.guessWrong ? ["g", s.seq, s.by] : ["p", s.seq, s.by, s.inEdge, s.inIndex, s.outEdge, s.outIndex, s.color]; }
+function shotFromWire(w) { return w[0] === "g" ? { seq: w[1], by: w[2], guessWrong: true } : { seq: w[1], by: w[2], inEdge: w[3], inIndex: w[4], outEdge: w[5], outIndex: w[6], color: w[7] }; }
+function gameToWire(g) { return [1, g.code, (g.players || []).map(playerToWire), (g.shots || []).map(shotToWire), g.winner || null]; }
+function gameFromWire(w) {
+  if (!Array.isArray(w) || w[0] !== 1) throw new Error("format inconnu");
+  return { code: w[1], players: (w[2] || []).map(playerFromWire), shots: (w[3] || []).map(shotFromWire), winner: w[4] || null };
+}
+
+function b64encode(str) {
+  const bytes = new TextEncoder().encode(str);
+  let bin = "";
+  bytes.forEach((b) => { bin += String.fromCharCode(b); });
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+function b64decode(b64) {
+  b64 = b64.replace(/-/g, "+").replace(/_/g, "/");
+  while (b64.length % 4) b64 += "=";
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+}
+function encodeGame(g) {
+  try { return "OM1-" + b64encode(JSON.stringify(gameToWire(g))); }
+  catch (e) { console.error("orapa: encode failed", e); return ""; }
+}
+function decodeGame(text) {
+  try {
+    const m = (text || "").match(/OM1-[A-Za-z0-9_-]+/);
+    if (!m) return null;
+    return gameFromWire(JSON.parse(b64decode(m[0].slice(4))));
+  } catch (e) { console.error("orapa: decode failed", e); return null; }
+}
+/** The full shareable link for the current game — opening it elsewhere
+ *  imports the code automatically (see boot() below), so "sending a code"
+ *  is really just "sending a link". */
+function shareLink(g) {
+  const base = window.location.origin + window.location.pathname + window.location.search;
+  return base + "#" + encodeGame(g);
+}
+
+/** Merge a code just received from the opponent into our local game.
+ *  Rule of thumb: I'm the only authority on MY OWN board/name (never let
+ *  an older import overwrite my own progress); the incoming copy is the
+ *  authority on THEIRS. Shots are a plain union, de-duplicated by the
+ *  unique `seq` stamped on each one at creation time. `winner` is sticky. */
+function mergeIncoming(local, incoming, myId) {
+  const byId = {};
+  (local.players || []).forEach((p) => { byId[p.id] = p; });
+  (incoming.players || []).forEach((p) => {
+    if (p.id === myId) { if (!byId[p.id]) byId[p.id] = p; }
+    else byId[p.id] = p;
+  });
+  const players = Object.values(byId).slice(0, 2);
+  const seen = new Set();
+  const shots = [];
+  (local.shots || []).concat(incoming.shots || []).forEach((s) => {
+    if (!seen.has(s.seq)) { seen.add(s.seq); shots.push(s); }
+  });
+  return { code: local.code || incoming.code, players, shots, winner: local.winner || incoming.winner || null };
+}
+
+function loadLocal(key, fallback) { try { const v = localStorage.getItem(key); return v === null ? fallback : v; } catch (e) { return fallback; } }
+function saveLocal(key, val) { try { localStorage.setItem(key, val); } catch (e) {} }
+function removeLocal(key) { try { localStorage.removeItem(key); } catch (e) {} }
+
+/* =========================================================================
+   STATE
+   ========================================================================= */
+const S = {
+  screen: "landing",           // landing | room
+  name: loadLocal("orapa_name", ""),
+  playerId: loadLocal("orapa_pid", "") || makeId(),
+  game: null,
+  error: "",
+  copied: false,
+  showInfo: false,
+
+  importText: "",
+  importError: "",
+
+  placedPieces: [],
+  pendingShape: null,
+  pendingRotation: 0,
+  pendingColor: null,
+  placeError: "",
+
+  guessPieces: [],
+  guessShape: null,
+  guessRotation: 0,
+  guessColor: null,
+  guessError: "",
+
+  playMode: "shoot", // shoot | guess (in-play toggle)
+};
+saveLocal("orapa_pid", S.playerId);
+
+function me() { return S.game && S.game.players ? S.game.players.find((p) => p.id === S.playerId) : null; }
+function opponent() { return S.game && S.game.players ? S.game.players.find((p) => p.id !== S.playerId) : null; }
+function isMyTurn() { return !!S.game && deriveStatus(S.game) === "playing" && !!turnPlayer(S.game) && turnPlayer(S.game).id === S.playerId; }
+
+/* =========================================================================
+   ACTIONS
+   ========================================================================= */
+function createRoom() {
+  if (!S.name.trim()) { S.error = "Entre ton nom d'abord."; render(); return; }
+  saveLocal("orapa_name", S.name.trim());
+  const g = { code: makeCode(), players: [{ id: S.playerId, name: S.name.trim(), board: null }], shots: [], winner: null };
+  S.game = g; S.screen = "room"; S.error = ""; S.importText = ""; S.importError = "";
+  render();
+}
+
+/** Handles both the very first join (pasting/opening a friend's invite link
+ *  on the landing screen) and every later sync (their latest link once
+ *  you're already in a room) — same operation either way. `text` defaults
+ *  to the paste box but boot() also feeds it a link opened directly. */
+function applyIncoming(text) {
+  const decoded = decodeGame(text != null ? text : S.importText);
+  if (!decoded) { S.importError = "Ce code ou ce lien est invalide ou incomplet."; render(); return; }
+  if (!S.game) {
+    if (!S.name.trim()) { S.importError = "Entre ton nom d'abord."; render(); return; }
+    saveLocal("orapa_name", S.name.trim());
+    const already = decoded.players.find((p) => p.id === S.playerId);
+    if (!already) {
+      if (decoded.players.length >= 2) { S.importError = "Cette mine est déjà pleine."; render(); return; }
+      decoded.players.push({ id: S.playerId, name: S.name.trim(), board: null });
+    }
+    S.game = decoded;
+    S.screen = "room";
+  } else {
+    S.game = mergeIncoming(S.game, decoded, S.playerId);
+  }
+  S.importText = ""; S.importError = "";
+  clearHash();
+  render();
+}
+
+function leaveToLanding() {
+  removeLocal("orapa_game");
+  clearHash();
+  Object.assign(S, {
+    screen: "landing", game: null, error: "", importText: "", importError: "",
+    placedPieces: [], pendingShape: null, pendingRotation: 0, pendingColor: null, placeError: "",
+    guessPieces: [], guessShape: null, guessRotation: 0, guessColor: null, guessError: "", playMode: "shoot",
+  });
+  render();
+}
+
+function clearHash() {
+  if (window.location.hash) history.replaceState(null, "", window.location.pathname + window.location.search);
+}
+
+/** Runs once at startup: resume a game already in progress on this device
+ *  (localStorage), and/or fold in a link that was just opened (the URL
+ *  hash) — the whole reason "sending a move" can be a single tap. */
+function boot() {
+  const saved = loadLocal("orapa_game", "");
+  if (saved) { try { S.game = JSON.parse(saved); S.screen = "room"; } catch (e) {} }
+  const hash = window.location.hash.replace(/^#/, "");
+  if (hash) {
+    if (S.game) {
+      const decoded = decodeGame(hash);
+      if (decoded) S.game = mergeIncoming(S.game, decoded, S.playerId);
+      clearHash();
+    } else {
+      S.importText = hash;
+    }
+  }
+}
+
+function panelState(panel) {
+  return panel === "setup"
+    ? { pieces: S.placedPieces, shape: S.pendingShape, rotation: S.pendingRotation, color: S.pendingColor }
+    : { pieces: S.guessPieces, shape: S.guessShape, rotation: S.guessRotation, color: S.guessColor };
+}
+function setPanelError(panel, msg) { if (panel === "setup") S.placeError = msg; else S.guessError = msg; render(); }
+
+function pickShape(panel, id) {
+  const left = remainingCounts(panelState(panel).pieces)[id];
+  if (!(left > 0)) return;
+  if (panel === "setup") { S.pendingShape = id; S.pendingRotation = 0; } else { S.guessShape = id; S.guessRotation = 0; }
+  render();
+}
+function rotatePanel(panel) {
+  if (panel === "setup") S.pendingRotation = (S.pendingRotation + 1) % 4; else S.guessRotation = (S.guessRotation + 1) % 4;
+  render();
+}
+function pickColor(panel, c) {
+  const cc = colorCounts(panelState(panel).pieces);
+  if ((cc[c] || 0) >= 2) return;
+  if (panel === "setup") S.pendingColor = c; else S.guessColor = c;
+  render();
+}
+function clickCell(panel, r, c) {
+  const st = panelState(panel);
+  if (!st.shape || !st.color) { setPanelError(panel, "Choisis d'abord une pièce et une couleur."); return; }
+  const abs = canPlace(r, c, st.shape, st.rotation, st.pieces);
+  if (!abs) { setPanelError(panel, "Placement invalide : hors plateau, chevauchement, ou contact par un côté avec une autre pièce."); return; }
+  const cc = colorCounts(st.pieces);
+  if ((cc[st.color] || 0) >= 2) { setPanelError(panel, "Déjà 2 pièces de cette couleur."); return; }
+  const piece = { uid: st.shape + "#" + Date.now() + Math.random(), shapeId: st.shape, rotation: st.rotation, color: st.color, cells: abs };
+  if (panel === "setup") { S.placedPieces.push(piece); S.placeError = ""; } else { S.guessPieces.push(piece); S.guessError = ""; }
+  render();
+}
+function removePiece(panel, uid) {
+  if (panel === "setup") S.placedPieces = S.placedPieces.filter((p) => p.uid !== uid);
+  else S.guessPieces = S.guessPieces.filter((p) => p.uid !== uid);
+  render();
+}
+
+function submitReady() {
+  if (S.placedPieces.length !== TOTAL_PIECES || !S.game) return;
+  const idx = S.game.players.findIndex((p) => p.id === S.playerId);
+  if (idx < 0) return;
+  S.game.players[idx].board = S.placedPieces;
+  render();
+}
+
+function shoot(edge, index) {
+  if (!isMyTurn()) return;
+  const mine = me(), opp = opponent();
+  if (!mine || !opp || !opp.board) return;
+  const result = traceRay(edge, index, piecesToCellMap(opp.board));
+  S.game.shots.push({ seq: S.playerId + "-" + makeId(6), by: S.playerId, inEdge: edge, inIndex: index, outEdge: result.outEdge, outIndex: result.outIndex, color: result.colorName });
+  render();
+}
+
+function submitGuess() {
+  if (S.guessPieces.length !== TOTAL_PIECES || !S.game) return;
+  const opp = opponent();
+  if (!opp) return;
+  const correct = boardsEqual(S.guessPieces, opp.board);
+  if (correct) { S.game.winner = S.playerId; }
+  else { S.game.shots.push({ seq: S.playerId + "-" + makeId(6), by: S.playerId, guessWrong: true }); }
+  S.guessPieces = []; S.guessShape = null; S.guessRotation = 0; S.guessColor = null; S.guessError = ""; S.playMode = "shoot";
+  render();
+}
+
+function copyText(text, flagRender) {
+  if (!text || !navigator.clipboard) return;
+  navigator.clipboard.writeText(text).then(() => {
+    S.copied = true; render();
+    setTimeout(() => { S.copied = false; render(); }, 1500);
+  });
+}
+
+/* =========================================================================
+   RENDERING — small string-template views, one delegated event pipeline.
+   ========================================================================= */
+function esc(s) {
+  return String(s == null ? "" : s).replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
+}
+
+function icon(name, size, cls) {
+  const s = size || 16;
+  const common = 'width="' + s + '" height="' + s + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" class="' + (cls || "") + '"';
+  const paths = {
+    gem: '<path d="M6 3h12l3 6-9 12L3 9z"/><path d="M3 9h18M9 3l3 6-3 12M15 3l-3 6 3 12"/>',
+    lantern: '<path d="M9 2.5h6M8 6h8l-1 4H9z"/><rect x="7" y="10" width="10" height="8" rx="2"/><path d="M12 18v3.5M9.5 21.5h5"/>',
+    crosshair: '<circle cx="12" cy="12" r="8"/><path d="M12 2.5v4M12 17.5v4M2.5 12h4M17.5 12h4"/>',
+    users: '<circle cx="9" cy="8" r="3.2"/><path d="M3.2 20a5.8 5.8 0 0 1 11.6 0"/><circle cx="17.3" cy="9.2" r="2.6"/><path d="M14.8 20a4.9 4.9 0 0 1 6.7-4"/>',
+    copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 15V6a2 2 0 0 1 2-2h9"/>',
+    check: '<path d="M4 12.5l5 5L20 6.5"/>',
+    trophy: '<path d="M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M7 5H4.2a3 3 0 0 0 3.2 4.2M17 5h2.8a3 3 0 0 1-3.2 4.2"/><path d="M9 20h6M12 15v3"/>',
+    rotate: '<path d="M4 12a8 8 0 0 1 14-5.3M20 12a8 8 0 0 1-14 5.3"/><path d="M18 3v5h-5M6 21v-5h5"/>',
+    x: '<path d="M5 5l14 14M19 5L5 19"/>',
+    pick: '<path d="M3.5 10.5l6.5-6.5 10 10-6.5 6.5z"/><path d="M9 5.5l9.5 9.5"/>',
+  };
+  return "<svg " + common + ">" + (paths[name] || "") + "</svg>";
+}
+
+function pieceTrayHtml(panel, remaining, pending, disabled) {
+  return '<div class="tray">' + SHAPE_IDS.map((id) => {
+    const left = remaining[id];
+    const canPick = left > 0 && !disabled;
+    const isSel = pending === id;
+    return '<button class="btn btn-secondary tray-item' + (isSel ? " active" : "") + '" data-act="pick-shape" data-panel="' + panel + '" data-shape="' + id + '" ' + (canPick ? "" : "disabled") + '>'
+      + '<span class="t-name">' + esc(SHAPES[id].name) + '</span>'
+      + '<span class="t-count">' + left + " restante" + (left > 1 ? "s" : "") + '</span>'
+      + '</button>';
+  }).join("") + '</div>';
+}
+
+function colorPickerHtml(panel, value, colCounts) {
+  return '<div class="swatches">' + COLOR_CHOICES.map((c) => {
+    const used = colCounts[c] || 0;
+    const disabled = used >= 2;
+    return '<button class="swatch' + (value === c ? " selected" : "") + (disabled ? " disabled" : "") + '" data-act="pick-color" data-panel="' + panel + '" data-color="' + c + '" title="' + COLOR_LABEL[c] + '" style="background:' + COLOR_HEX[c] + '" ' + (disabled ? "disabled" : "") + '></button>';
+  }).join("") + '</div>';
+}
+
+function pieceCellsHtml(pieces, cellSize) {
+  return pieces.flatMap((p) => p.cells.map((c) => {
+    const color = COLOR_HEX[p.color] || colorDisplayHex(p.color);
+    const clip = CLIP_PATHS[c.type];
+    return '<div class="gem-fill' + (c.type === "full" ? " full" : "") + '" style="left:' + (c.c * cellSize + 2) + 'px;top:' + (c.r * cellSize + 2) + 'px;width:' + (cellSize - 4) + 'px;height:' + (cellSize - 4) + 'px;background:' + color + ';clip-path:' + clip + '"></div>';
+  })).join("");
+}
+
+function setupGridHtml(panel, pieces, pendingShape) {
+  const cell = 34;
+  let cells = "";
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+    cells += '<div class="board-cell' + (pendingShape ? " placeable" : "") + '" data-act="grid-cell" data-panel="' + panel + '" data-r="' + r + '" data-c="' + c + '" style="left:' + (c * cell) + 'px;top:' + (r * cell) + 'px;width:' + cell + 'px;height:' + cell + 'px"></div>';
+  }
+  const removes = pieces.map((p) => {
+    const c0 = p.cells[0];
+    return '<div class="remove-x" data-act="remove-piece" data-panel="' + panel + '" data-uid="' + esc(p.uid) + '" title="Retirer" style="left:' + (c0.c * cell + 2) + 'px;top:' + (c0.r * cell + 2) + 'px">' + icon("x", 10) + '</div>';
+  }).join("");
+  return '<div class="board-scroll"><div class="board-wrap"><div class="board-grid" style="width:' + (COLS * cell) + 'px;height:' + (ROWS * cell) + 'px">'
+    + cells + pieceCellsHtml(pieces, cell) + removes
+    + '</div></div></div>';
+}
+
+function edgeLabelBtn(edge, i, shots, canShoot, cellSize) {
+  const relevant = shots.filter((s) => s.inEdge === edge && s.inIndex === i);
+  const fired = relevant.length > 0;
+  const last = relevant[relevant.length - 1];
+  const bg = fired ? colorDisplayHex(last.color) : null;
+  const style = 'width:' + (edge === "top" || edge === "bottom" ? cellSize : 24) + 'px;height:' + (edge === "left" || edge === "right" ? cellSize : 24) + 'px;'
+    + (fired ? "background:" + bg + "26;border-color:" + bg + ";color:var(--text)" : "");
+  const title = fired ? ("sortie " + edgeLabel(last.outEdge, last.outIndex) + " · " + last.color) : "tirer ici";
+  return '<button class="edge-btn' + (canShoot ? " live" : "") + (fired ? " fired" : "") + '" data-act="shoot" data-edge="' + edge + '" data-index="' + i + '" title="' + esc(title) + '" style="' + style + '" ' + (canShoot ? "" : "disabled") + '>' + edgeLabel(edge, i) + '</button>';
+}
+
+function gridShootHtml(shots, canShoot) {
+  const cell = 34;
+  let top = '<div class="edge-strip" style="margin-left:' + (cell + 27) + 'px">';
+  for (let c = 0; c < COLS; c++) top += edgeLabelBtn("top", c, shots, canShoot, cell);
+  top += "</div>";
+  let bottom = '<div class="edge-strip" style="margin-left:' + (cell + 27) + 'px">';
+  for (let c = 0; c < COLS; c++) bottom += edgeLabelBtn("bottom", c, shots, canShoot, cell);
+  bottom += "</div>";
+  let left = '<div class="edge-strip vert" style="margin-right:2px">';
+  for (let r = 0; r < ROWS; r++) left += edgeLabelBtn("left", r, shots, canShoot, cell);
+  left += "</div>";
+  let right = '<div class="edge-strip vert" style="margin-left:2px">';
+  for (let r = 0; r < ROWS; r++) right += edgeLabelBtn("right", r, shots, canShoot, cell);
+  right += "</div>";
+  let rows = "";
+  for (let r = 0; r < ROWS; r++) {
+    rows += '<div style="display:flex">';
+    for (let c = 0; c < COLS; c++) rows += '<div style="width:' + cell + 'px;height:' + cell + 'px;margin:1px;border-radius:3px;background:var(--panel-2);border:1px solid var(--line-soft)"></div>';
+    rows += "</div>";
+  }
+  return '<div class="board-scroll"><div class="board-wrap">' + top
+    + '<div style="display:flex">' + left + '<div style="background:var(--ink-deep);padding:8px;border-radius:6px;border:1px solid var(--line-soft)">' + rows + '</div>' + right + '</div>'
+    + bottom + '</div></div>';
+}
+
+function shotLogHtml(game) {
+  const shots = (game && game.shots) || [];
+  const list = [...shots].reverse().slice(0, 12);
+  if (list.length === 0) return "";
+  return '<div class="log"><p class="kicker">Journal</p><div>' + list.map((s) => {
+    const who = playerName(game, s.by);
+    if (s.guessWrong) return '<div class="log-item"><span class="who">' + esc(who) + '</span><span>déduction tentée — incorrecte</span></div>';
+    const hex = colorDisplayHex(s.color);
+    return '<div class="log-item"><span class="who">' + esc(who) + '</span><span>' + edgeLabel(s.inEdge, s.inIndex) + ' &rarr; ' + edgeLabel(s.outEdge, s.outIndex) + ' (' + esc(s.color) + ')<span class="swatch-dot" style="background:' + hex + '"></span></span></div>';
+  }).join("") + '</div></div>';
+}
+
+/** The persistent "no server" sync panel: your current code to copy & send,
+ *  and a paste box to bring in whatever your opponent last sent you. */
+function syncPanelHtml(hint) {
+  const link = S.game ? shareLink(S.game) : "";
+  return '<div class="sync-panel">'
+    + '<p class="sync-title">' + icon("copy", 13) + ' Synchroniser la partie</p>'
+    + (hint ? '<p class="msg-hint" style="margin-bottom:12px">' + hint + '</p>' : "")
+    + '<div class="sync-block">'
+    + '<p class="sync-label"><span class="step-badge">1</span>Envoie ce lien à ton adversaire — en l\'ouvrant, sa page se met à jour toute seule</p>'
+    + '<div class="sync-actions"><button class="btn btn-primary" data-act="copy-link">' + (S.copied ? icon("check", 14) : icon("copy", 14)) + ' Copier le lien à envoyer</button></div>'
+    + '</div>'
+    + '<div class="sync-block">'
+    + '<p class="sync-label"><span class="step-badge">2</span>Si tu as reçu un lien ou un code au lieu de l\'ouvrir, colle-le ici</p>'
+    + '<textarea class="sync-textarea" rows="2" placeholder="Lien ou code OM1-…" data-bind="importText">' + esc(S.importText) + '</textarea>'
+    + '<div class="sync-actions"><button class="btn btn-secondary" data-act="import-code">Importer</button></div>'
+    + (S.importError ? '<p class="msg-error">' + esc(S.importError) + '</p>' : "")
+    + '</div>'
+    + '</div>';
+}
+
+function infoModalHtml() {
+  if (!S.showInfo) return "";
+  const mixes = ["rouge + bleu = violet", "rouge + jaune = orange", "bleu + jaune = vert", "rouge + bleu + jaune = marron", "+ blanc = version claire", "+ noir = version foncée", "blanc + noir = gris (ou couleur grisée)"];
+  return '<div class="modal-overlay" data-act="close-info"><div class="modal" onclick="event.stopPropagation()">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center"><h3>Règles</h3><button class="modal-close" data-act="close-info">' + icon("x", 18) + '</button></div>'
+    + '<p>Choisis 5 pièces parmi les 8 disponibles, peins-les d\'une couleur (max 2 pièces de la même couleur), place-les sur le plateau avec l\'orientation de ton choix. Deux pièces ne peuvent pas se toucher par un côté, seulement par un coin.</p>'
+    + '<p>À ton tour, envoie une onde depuis un bord&nbsp;: elle rebondit à 90° sur un côté incliné (diagonale de case), et fait demi-tour sur un côté plat. Elle ressort avec la couleur de toutes les gemmes traversées. Devine l\'ensemble du plateau adverse pour gagner.</p>'
+    + '<p class="kicker">Jouer à distance</p>'
+    + '<p>Il n\'y a pas de serveur&nbsp;: après chaque coup, la page prépare un lien à envoyer à ton adversaire par le message de ton choix. Il lui suffit de l\'ouvrir pour voir ton coup et reprendre la main&nbsp;: pas de copier-coller de son côté.</p>'
+    + '<p class="kicker">Mélange des couleurs</p><div class="mix-list">' + mixes.map((t) => "<div>" + t + "</div>").join("") + '</div>'
+    + '</div></div>';
+}
+
+function infoToggleHtml() { return '<button class="info-toggle" data-act="open-info">' + icon("lantern", 16) + '</button>'; }
+
+function wordmarkHtml() {
+  return '<div class="wordmark"><div class="glyphs">' + icon("gem", 26, "icon-ember") + icon("gem", 26, "icon-faint") + '</div>'
+    + '<h1>Orapa Mine</h1><p class="tag">Concession d\'extraction &agrave; deux</p></div>';
+}
+
+function landingView() {
+  return '<div class="shell">' + wordmarkHtml()
+    + '<p class="lede" style="text-align:center;margin:-8px 0 22px">Place 5 pièces sur le plateau, peins-les, et devine où l\'adversaire a caché les siennes en sondant sa mine avec des ondes lumineuses. Aucun compte requis&nbsp;: après chaque coup, tu envoies un lien à ton adversaire par le message de ton choix, et il lui suffit de l\'ouvrir.</p>'
+    + '<input type="text" class="name-input" data-bind="name" value="' + esc(S.name) + '" placeholder="Ton nom" />'
+    + '<div class="stack" style="margin-top:14px">'
+    + '<button class="btn btn-primary" data-act="create-room">Creuser une nouvelle mine</button>'
+    + '</div>'
+    + (S.error ? '<p class="msg-error">' + esc(S.error) + '</p>' : "")
+    + '<div class="divider" style="margin-top:26px"></div>'
+    + '<div class="sync-block" style="width:100%;max-width:340px">'
+    + '<p class="sync-label"><span class="step-badge">2</span>Ou colle ici le lien ou le code reçu d\'un ami (si tu ne l\'as pas déjà ouvert)</p>'
+    + '<textarea class="sync-textarea" rows="2" placeholder="Lien ou code OM1-…" data-bind="importText">' + esc(S.importText) + '</textarea>'
+    + '<div class="sync-actions"><button class="btn btn-secondary" data-act="import-code">Rejoindre avec ce code</button></div>'
+    + (S.importError ? '<p class="msg-error">' + esc(S.importError) + '</p>' : "")
+    + '</div>'
+    + '<button class="btn btn-secondary" data-act="open-info" style="margin-top:22px;padding:8px 14px;font-size:13px">' + icon("lantern", 14) + ' Voir les règles</button>'
+    + '<p class="footnote">Ton adversaire voit son propre plateau depuis sa page&nbsp;: joue entre personnes de confiance, comme aux échecs par correspondance.</p>'
+    + '</div>';
+}
+
+function waitingView() {
+  return '<div class="shell">' + infoToggleHtml() + wordmarkHtml()
+    + '<div class="card center-col">'
+    + '<div class="rivet tl"></div><div class="rivet tr"></div><div class="rivet bl"></div><div class="rivet br"></div>'
+    + icon("users", 24, "icon-ember")
+    + '<h2 style="margin:12px 0 4px">En attente d\'un second mineur</h2>'
+    + '<p class="msg-hint">Concession n&deg; ' + esc(S.game.code) + '</p>'
+    + syncPanelHtml("Envoie le code ci-dessous à ton adversaire ; quand il te répond avec le sien, colle-le en dessous pour le voir rejoindre la partie.")
+    + '<button class="btn btn-ghost" data-act="leave" style="margin-top:8px">Quitter</button>'
+    + '</div></div>';
+}
+
+function setupView() {
+  const remaining = remainingCounts(S.placedPieces);
+  const colCounts = colorCounts(S.placedPieces);
+  const meP = me();
+  if (meP && meP.board) {
+    return '<div class="shell">' + infoToggleHtml() + wordmarkHtml()
+      + '<div class="card center-col"><div class="rivet tl"></div><div class="rivet tr"></div><div class="rivet bl"></div><div class="rivet br"></div>'
+      + '<h2 style="margin:0 0 4px">Prêt</h2><p style="color:var(--ember)">En attente de ' + esc((opponent() && opponent().name) || "l'adversaire") + '&hellip;</p>'
+      + syncPanelHtml("Envoie-lui ton code ; une fois qu'il aura placé ses pièces et t'aura répondu, colle son code pour lancer la partie.")
+      + '<button class="btn btn-ghost" data-act="leave" style="margin-top:8px">Quitter</button>'
+      + '</div></div>';
+  }
+  const disabled = S.placedPieces.length >= TOTAL_PIECES;
+  return '<div class="shell">' + infoToggleHtml() + wordmarkHtml()
+    + '<div class="card center-col" style="max-width:600px">'
+    + '<div class="rivet tl"></div><div class="rivet tr"></div><div class="rivet bl"></div><div class="rivet br"></div>'
+    + '<h2 style="margin:0 0 4px">Place tes 5 pièces</h2>'
+    + '<p class="msg-hint" style="margin:8px 0 4px">Choisis 5 pièces parmi 8, maximum 2 de la même couleur. Choisis une forme, une orientation, une couleur, puis clique sur le plateau pour la poser.</p>'
+    + pieceTrayHtml("setup", remaining, S.pendingShape, disabled)
+    + (S.pendingShape ? '<div class="tools-row"><button class="btn btn-secondary btn-icon" data-act="rotate" data-panel="setup">' + icon("rotate", 14) + '</button>' + colorPickerHtml("setup", S.pendingColor, colCounts) + '</div>' : "")
+    + setupGridHtml("setup", S.placedPieces, S.pendingShape)
+    + (S.placeError ? '<p class="msg-error">' + esc(S.placeError) + '</p>' : "")
+    + '<button class="btn btn-primary" data-act="submit-ready" style="margin-top:16px" ' + (S.placedPieces.length === TOTAL_PIECES ? "" : "disabled") + '>Prêt (' + S.placedPieces.length + "/" + TOTAL_PIECES + ')</button>'
+    + syncPanelHtml("Une fois prêt, envoie ton code à ton adversaire pour qu'il sache que tu as terminé.")
+    + '<button class="btn btn-ghost" data-act="leave" style="margin-top:8px">Quitter</button>'
+    + '</div></div>';
+}
+
+function guessPanelHtml() {
+  const remaining = remainingCounts(S.guessPieces);
+  const colCounts = colorCounts(S.guessPieces);
+  const disabled = S.guessPieces.length >= TOTAL_PIECES;
+  return '<p class="panel-label">Reconstitue le plateau adverse (' + S.guessPieces.length + "/" + TOTAL_PIECES + ')</p>'
+    + pieceTrayHtml("guess", remaining, S.guessShape, disabled)
+    + (S.guessShape ? '<div class="tools-row"><button class="btn btn-secondary btn-icon" data-act="rotate" data-panel="guess">' + icon("rotate", 14) + '</button>' + colorPickerHtml("guess", S.guessColor, colCounts) + '</div>' : "")
+    + setupGridHtml("guess", S.guessPieces, S.guessShape)
+    + (S.guessError ? '<p class="msg-error">' + esc(S.guessError) + '</p>' : "")
+    + '<button class="btn btn-primary" data-act="submit-guess" style="margin-top:14px" ' + (S.guessPieces.length === TOTAL_PIECES ? "" : "disabled") + '>Valider ma déduction</button>';
+}
+
+function playingView() {
+  const myShots = S.game.shots.filter((s) => s.by === S.playerId && !s.guessWrong);
+  const turn = isMyTurn();
+  const oppP = opponent();
+  return '<div class="shell">' + infoToggleHtml() + wordmarkHtml()
+    + '<div class="card center-col" style="max-width:600px">'
+    + '<div class="rivet tl"></div><div class="rivet tr"></div><div class="rivet bl"></div><div class="rivet br"></div>'
+    + '<div class="turn-row">' + icon("crosshair", 18, turn ? "icon-ember" : "icon-faint") + '<h2>' + (turn ? "À toi de jouer" : "Tour de " + esc((oppP && oppP.name) || "l'adversaire")) + '</h2></div>'
+    + '<p class="players-line">' + esc((me() && me().name) || S.name) + " vs " + esc((oppP && oppP.name) || "?") + " &middot; concession n&deg; " + esc(S.game.code) + '</p>'
+    + (turn ? '<div class="mode-row"><button class="btn ' + (S.playMode === "shoot" ? "btn-primary" : "btn-secondary") + '" data-act="set-play-mode" data-val="shoot">' + icon("crosshair", 14) + ' Envoyer une onde</button><button class="btn ' + (S.playMode === "guess" ? "btn-primary" : "btn-secondary") + '" data-act="set-play-mode" data-val="guess">' + icon("trophy", 14) + ' Deviner la mine</button></div>' : "")
+    + (S.playMode === "shoot" || !turn
+      ? '<p class="panel-label">Mine de ' + esc((oppP && oppP.name) || "l'adversaire") + '</p>' + gridShootHtml(myShots, turn)
+      : guessPanelHtml())
+    + shotLogHtml(S.game)
+    + syncPanelHtml(turn ? "Une fois ton coup joué, envoie ton code à ton adversaire pour qu'il puisse jouer le sien." : "Colle ici le code que ton adversaire vient de t'envoyer pour voir son coup et reprendre la main.")
+    + '</div></div>';
+}
+
+function finishedView() {
+  const iWon = S.game.winner === S.playerId;
+  const oppP = opponent();
+  return '<div class="shell">' + infoToggleHtml() + wordmarkHtml()
+    + '<div class="card center-col" style="max-width:520px">'
+    + '<div class="rivet tl"></div><div class="rivet tr"></div><div class="rivet bl"></div><div class="rivet br"></div>'
+    + icon("trophy", 38, "icon-ember")
+    + '<h2 style="margin:14px 0 4px">' + (iWon ? "Tu as trouvé la mine !" : esc((oppP && oppP.name) || "L'adversaire") + " a trouvé ta mine.") + '</h2>'
+    + '<p class="msg-hint">Partie terminée &middot; ' + esc((me() && me().name) || S.name) + " vs " + esc((oppP && oppP.name) || "?") + '</p>'
+    + shotLogHtml(S.game)
+    + '<button class="btn btn-primary" data-act="leave" style="margin-top:18px">Nouvelle partie</button>'
+    + '</div></div>';
+}
+
+function appHtml() {
+  if (S.screen === "landing") return landingView() + infoModalHtml();
+  if (!S.game) return '<div class="shell">' + wordmarkHtml() + '<p class="msg-hint">Chargement de la mine&hellip;</p></div>' + infoModalHtml();
+  const status = deriveStatus(S.game);
+  let body;
+  if (status === "waiting") body = waitingView();
+  else if (status === "setup") body = setupView();
+  else if (status === "playing") body = playingView();
+  else if (status === "finished") body = finishedView();
+  else body = "";
+  return body + infoModalHtml();
+}
+
+function render() {
+  if (S.game) saveLocal("orapa_game", JSON.stringify(S.game)); else removeLocal("orapa_game");
+  document.getElementById("app").innerHTML = appHtml();
+}
+
+/* =========================================================================
+   EVENT DELEGATION
+   ========================================================================= */
+document.addEventListener("click", (e) => {
+  const el = e.target.closest("[data-act]");
+  if (!el) return;
+  const act = el.dataset.act;
+  if (act === "create-room") createRoom();
+  else if (act === "import-code") applyIncoming();
+  else if (act === "open-info") { S.showInfo = true; render(); }
+  else if (act === "close-info") { S.showInfo = false; render(); }
+  else if (act === "copy-link") copyText(S.game ? shareLink(S.game) : "");
+  else if (act === "leave") leaveToLanding();
+  else if (act === "pick-shape") pickShape(el.dataset.panel, el.dataset.shape);
+  else if (act === "rotate") rotatePanel(el.dataset.panel);
+  else if (act === "pick-color") pickColor(el.dataset.panel, el.dataset.color);
+  else if (act === "grid-cell") clickCell(el.dataset.panel, parseInt(el.dataset.r, 10), parseInt(el.dataset.c, 10));
+  else if (act === "remove-piece") removePiece(el.dataset.panel, el.dataset.uid);
+  else if (act === "submit-ready") submitReady();
+  else if (act === "submit-guess") submitGuess();
+  else if (act === "set-play-mode") { S.playMode = el.dataset.val; render(); }
+  else if (act === "shoot") shoot(el.dataset.edge, parseInt(el.dataset.index, 10));
+});
+
+document.addEventListener("input", (e) => {
+  const el = e.target.closest("[data-bind]");
+  if (!el) return;
+  S[el.dataset.bind] = el.value;
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" || e.shiftKey) return;
+  const el = e.target.closest("[data-bind]");
+  if (!el || el.dataset.bind !== "name" || el.tagName === "TEXTAREA") return;
+  if (S.screen === "landing") createRoom();
+});
+
+boot();
+render();
+</script>
+</body>
+</html>
